@@ -233,9 +233,17 @@ int main(int argc, char* argv[]){
 
 	
 
+	// Print results
 	if(rank == 0){
 		if(p == 1){
-			printf(" %f, %d, %d results=", temp, nsteps, n);
+			printf(" %f %d %d ", temp, nsteps, n);
+
+			if(c == 1){
+				printf("Times= %d %d", (int)setup_end - (int)setup_start, (int)func_end - (int)func_start);
+			}
+			
+			
+			printf(" results=");
 			for(int i=0; i<nsteps/cor_coef; i++){
 				printf(" %f", global_res[i]);
 			}
@@ -243,11 +251,12 @@ int main(int argc, char* argv[]){
 		} else {
 			printf("Temperature =  %f, nsteps = %d, size = %d\n", temp, nsteps, n);
 			printf("Final Magnetization  = %f\n", global_res[nsteps/cor_coef - 1]);
+	
+			if(c == 1){
+				printf("Setup Time = %d, Function Time = %d\n", (int)setup_end - (int)setup_start, (int)func_end - (int)func_start);
+			}
 		}
 
-		if(c == 1){
-			printf("Setup Time = %d, Function Time = %d\n", (int)setup_end - (int)setup_start, (int)func_end - (int)func_start);
-		}
 	}
 
 	// Clean up
