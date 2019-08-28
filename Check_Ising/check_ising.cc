@@ -3,15 +3,18 @@
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
+#include <chrono>
 
 #include "mpi.h"
+
+using namespace std::chrono;
 
 /*
  * This script uses the check model to parallelise the Ising mode
  *
  */
 
-void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n, int m, int car_coef, double* measurements);
+void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n, int m, double* measurements);
 
 void print_rank(double** mat, int n, int m, int rank, int p_rank, MPI_Comm comm);
 
@@ -27,13 +30,9 @@ int main(int argc, char* argv[]){
 	double temp = 500;
 	int length = 10;
 
-	int cor_coef = 20;
 	int p=0;
 
 	int c = 0;
-
-	// Create time values to calculate how long each part took to calculate
-	time_t setup_start, setup_end, func_start, func_end;
 
 
 	// Use get opt to parse agtuments
@@ -65,7 +64,7 @@ int main(int argc, char* argv[]){
 
 	int rank, nprocs;
 
-	int nsamples = nsteps/cor_coef;
+	int nsamples = nsteps;
 
 
 	// begin MPI
@@ -74,10 +73,11 @@ int main(int argc, char* argv[]){
 	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
 
-	setup_start = time(NULL);
+	MPI_Barrier(MPI_COMM_WORLD);
+	high_resolution_clock::time_point setup_start = high_resolution_clock::now();
+
 	// Find dimensions of cartesian communicator
-	int* psize = calloc(2, sizeof(int));
-	func_end = time(NULL);
+	int* psize = new int[2]();
 
 	MPI_Dims_create(nprocs, 2, psize);
 
@@ -153,8 +153,9 @@ int main(int argc, char* argv[]){
 	
 	// Create matrix on each processor
 	// Need extra rows and columns for halo points
-	double** mat = calloc(y_length + 2, sizeof(double*));
-	double* array = calloc((y_length + 2)*(x_length+2), sizeof(double));
+	double** mat = new double*[y_length + 2]();
+	double* array = new double[(y_length + 2)*(x_length + 2)]();
+
 
 	// Now set up matrix
 	// Move mat so that 
@@ -167,7 +168,6 @@ int main(int argc, char* argv[]){
 	// Now move mat point so first row isn't in the halo;
 	mat++;
 
-	MPI_Barrier(cart_comm);
 
 	for(i=0; i<y_length; i++){
 		for(j=0; j<x_length; j++){
@@ -179,24 +179,32 @@ int main(int argc, char* argv[]){
 		}
 	}
 
-	setup_end = time(NULL);
+	MPI_Barrier(cart_comm);
+	high_resolution_clock::time_point setup_end = high_resolution_clock::now();
+
+	duration<double> setup_time = duration_cast<duration<double>>(setup_end - setup_start);
 
 	// Print x_length and y_length
-//	printf("rank = %d, co_ords = [%d, %d], x length = %d, y length = %d\n", rank, coords[0], coords[1],x_length, y_length );
 
 	// Now begin the Ising model for each rank
 
 	// Create array that will store the results
-	double* measurements = calloc(nsamples, sizeof(double));
+	double* measurements = new double[nsamples]();
 	
 	MPI_Barrier(cart_comm);	
 
-	func_start = time(NULL);
-	ising(mat, cart_comm, temp, step, nsteps, y_length, x_length, cor_coef, measurements);
-	func_end = time(NULL);
+	high_resolution_clock::time_point func_start = high_resolution_clock::now();
+
+	ising(mat, cart_comm, temp, step, nsteps, y_length, x_length, measurements);
+
+	MPI_Barrier(cart_comm);
+
+	high_resolution_clock::time_point func_end = high_resolution_clock::now();
+
+	duration<double> func_time = duration_cast<duration<double>>(func_end - func_start);
 
 	// Now Gather local Average to create 
-	double* global_av = calloc(nsamples, sizeof(double));
+	double* global_av = new double[nsamples];
 
 	MPI_Allreduce(measurements, global_av, nsamples, MPI_DOUBLE, MPI_SUM, cart_comm);
 
@@ -211,7 +219,7 @@ int main(int argc, char* argv[]){
 		} else if(p == 1){
 			printf("%f %d %d %d ", temp, nsteps, length, nprocs);
 
-			printf("times= %d %d ", (int)setup_end - (int)setup_start, (int)func_end - (int)func_start);
+			printf("times= %f %f ", setup_time.count(), func_time.count());
 
 			printf("results=");
 			for(i=0; i<nsamples; i++){
@@ -221,6 +229,19 @@ int main(int argc, char* argv[]){
 
 		}
 	}
+
+	// Move mat back so it can be properly deleted
+	mat--;
+
+	delete[] psize;
+
+	delete[] mat;
+	delete[] array;
+
+	delete[] measurements;
+	delete[] global_av;
+
+
 	
 	MPI_Finalize();
 	return 0;
@@ -228,7 +249,7 @@ int main(int argc, char* argv[]){
 
 
 // Function which Calculuates the Ising model on each processor
-void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n, int m, int cor_coef, double* measurements){
+void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n, int m, double* measurements){
 	int iter, i, j;
 
 	double energy, flip_energy, d_energy;
@@ -236,7 +257,6 @@ void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n
 	// First find which processors are top bottom left and right
 	int tp, bp, lp, rp;
 	int odd_even;
-	int mag_index = 0;
 
 	int rank;
 	MPI_Comm_rank(comm, &rank);
@@ -249,7 +269,8 @@ void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n
 	MPI_Type_vector(n, 1, m+2, MPI_DOUBLE, &column);
 	MPI_Type_commit(&column);
 	MPI_Request* req;
-	req = calloc(4, sizeof(MPI_Request));
+	req = new MPI_Request[4];
+
 
 	// Begin iterations;
 	for( iter=0; iter<nsteps; iter++){
@@ -334,18 +355,14 @@ void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n
 		}
 
 		// Once decorrelation has occured, measure magnetization
-		if(iter % cor_coef == 0){
-			for(i=0; i< n; i++){
-				for(j=0; j<m; j++){
-					measurements[mag_index] += mat[i][j];
-				}
+		for(i=0; i< n; i++){
+			for(j=0; j<m; j++){
+				measurements[iter] += mat[i][j];
 			}
-			mag_index++;
 		}
-
-
-
 	}
+
+	delete[] req;
 
 }
 

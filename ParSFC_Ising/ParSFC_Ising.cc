@@ -4,9 +4,13 @@
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
+#include <chrono>
+
 #include "ParSFC.h"
 
 #include "mpi.h"
+
+using namespace std::chrono;
 
 /*
  * This script used SFCs to calculate to load balance the Ising model
@@ -17,20 +21,15 @@ void print_list(std::list<int> a);
 
 void send_edges(SFC* curve, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm) ;
 
-void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, double* &res, int div);
+void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, double* &res);
 
 int main(int argc, char* argv[]){
 
 	// Set up initial values
 	double temp = 0.05;
 	int nsteps = 100;
-	int cor_coef = 20;
 	int p = 0;
 	int c = 0;
-
-	// Create time values used to calculate how long each part took
-	time_t setup_start, setup_end, func_start, func_end;
-
 
 	// Size of matrix
 	int n = 8;
@@ -65,13 +64,15 @@ int main(int argc, char* argv[]){
 	}
 
 
-	double* res = new double[nsteps/cor_coef]();
+	double* res = new double[nsteps]();
 
 	// Begin MPI
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
+
+	high_resolution_clock::time_point setup_start = high_resolution_clock::now();
 
 	// Create matrix
 	double** mat = new double*[n];
@@ -85,7 +86,6 @@ int main(int argc, char* argv[]){
 	int order = (int) (log(n)/log(2));
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	setup_start = time(NULL);	
 
 	hilbert Hil_SFC(mat, order, n, n);
 
@@ -208,30 +208,31 @@ int main(int argc, char* argv[]){
 	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	setup_end = time(NULL);
+	high_resolution_clock::time_point setup_end = high_resolution_clock::now();
 
+	duration<double> setup_time = duration_cast<duration<double>>(setup_end - setup_start);
+	
+
+	// Begin Function
+	MPI_Barrier(MPI_COMM_WORLD);
+	high_resolution_clock::time_point func_start = high_resolution_clock::now();
+
+	ParSFC_Ising(&Hil_SFC, temp, nsteps, rank,  a, b, nprocs, send_type, recv_type, MPI_COMM_WORLD, res);
 
 	MPI_Barrier(MPI_COMM_WORLD);
-	func_start = time(NULL);
+	high_resolution_clock::time_point func_end = high_resolution_clock::now();
 
-	ParSFC_Ising(&Hil_SFC, temp, nsteps, rank,  a, b, nprocs, send_type, recv_type, MPI_COMM_WORLD, res, cor_coef);
-
-	MPI_Barrier(MPI_COMM_WORLD);
-	func_end = time(NULL);
+	duration<double> func_time = duration_cast<duration<double>>(func_end - func_start);
 
 	// Now gather all the results
-	double* global_res = new double[nsteps/cor_coef];
+	double* global_res = new double[nsteps];
 
-
-
-	MPI_Allreduce(res, global_res, nsteps/cor_coef, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+	MPI_Allreduce(res, global_res, nsteps, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
 	// Now get the average
-	for(int i=0; i<nsteps/cor_coef; i++){
+	for(int i=0; i<nsteps; i++){
 		global_res[i] /= n*n;	
 	}
-
-	
 
 	// Print results
 	if(rank == 0){
@@ -239,21 +240,20 @@ int main(int argc, char* argv[]){
 			printf(" %f %d %d ", temp, nsteps, n);
 
 			if(c == 1){
-				printf("Times= %d %d", (int)setup_end - (int)setup_start, (int)func_end - (int)func_start);
+				printf(" %f %f ", setup_time.count(), func_time.count());
 			}
 			
 			
-			printf(" results=");
-			for(int i=0; i<nsteps/cor_coef; i++){
+			for(int i=0; i<nsteps; i++){
 				printf(" %f", global_res[i]);
 			}
 			printf("\n");
 		} else {
 			printf("Temperature =  %f, nsteps = %d, size = %d\n", temp, nsteps, n);
-			printf("Final Magnetization  = %f\n", global_res[nsteps/cor_coef - 1]);
+			printf("Final Magnetization  = %f\n", global_res[nsteps - 1]);
 	
 			if(c == 1){
-				printf("Setup Time = %d, Function Time = %d\n", (int)setup_end - (int)setup_start, (int)func_end - (int)func_start);
+				printf("Setup Time = %f, Function Time = %f\n", setup_time.count(), func_time.count());
 			}
 		}
 
@@ -319,7 +319,7 @@ void send_edges(SFC* curve, int no_proc, MPI_Datatype* data_send, MPI_Datatype* 
 }
 
 // This function calculates the metropolis algorithm 
-void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, double* &res, int div){
+void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, double* &res){
 	
 	// Initalise values
 	double energy;
@@ -344,8 +344,6 @@ void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, i
 
 	// Now iterate along SFC
 	for(int i=0; i< nsteps; i++){
-		// Send edges
-
 		// Iterate along even points in the SFC
 		for(int j=even_start; j<b; j+=2){
 			curve->index_2D(j, x, y);
@@ -381,7 +379,7 @@ void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, i
 	
 			if( -2 * energy <= 0){
 				curve->set(-1 * (*curve)[j], j);
-			} else if(drand48() < exp(2*energy)/temp){
+			} else if(drand48() < exp((2*energy)/temp)){
 				curve->set(-1 * (*curve)[j], j);
 			}
 
@@ -389,13 +387,10 @@ void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, i
 		send_edges(curve, nprocs, data_send, data_recv, comm);
 
 		// Calculate the magnetization
-		if(i % div == 0){
-			for(int j=a; j<b; j++){
-				res[it] += (*curve)[j];			
-			}
-			it++;
-
+		for(int j=a; j<b; j++){
+			res[i] += (*curve)[j];			
 		}
+
 
 	}
 

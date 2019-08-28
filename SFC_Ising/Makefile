@@ -4,7 +4,7 @@ CFLAGS = -g -Wall
 OBJECTS = SFC_Ising.o sfc.o
 
 ISING: $(OBJECTS)
-	$(CC) $(CFLAGS) -o $@ $^ -lm
+	$(CC) -std=c++11 $(CFLAGS) -o $@ $^ -lm
 
 clean:
 	rm $(OBJECTS)

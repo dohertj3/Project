@@ -278,7 +278,7 @@ void hilbert::index_2D(int index, int &x, int &y){
 		rx = (1 & (t/2) );
 		ry = (1 & (t ^ rx) );
 		rotate(s, x, y, rx, ry);
-		x = x + s * ry;
+		x = x + s * rx;
 		y = y + s * ry;
 		t = t/4;
 	}
