@@ -70,7 +70,7 @@ int main(int argc, char* argv[]){
 		printf("n - the number of iterations\n");
 		printf("m - the size of the lattice\n");
 		printf("p - prints in a way readable by certain functions\n");
-		printf("\nm value must be greater that 4\n");
+		printf("\nm value must be a power of 2\n");
 		return 0;
 	
 	}

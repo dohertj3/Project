@@ -284,36 +284,6 @@ void hilbert::index_2D(int index, int &x, int &y){
 	}
 }
 
-/*void hilbert::index_2D(int index, int &res_x, int &res_y){
-	// Initalise some values
-	int rx, ry;
-
-	res_x = 0;
-	res_y = 0;
-	int s = 1;
-	int t = index;
-
-	while(s<size){
-		rx = (int)floor(t/2) % 2;
-		
-		if( rx == 0){
-			ry = t % 2;
-		} else{
-			ry = ( (unsigned int)t ^ (unsigned int)rx ) % 2;
-		}
-	
-		rotate(s, res_x, res_y, rx, ry);
-
-		res_x = res_x + s*rx;
-		res_y = res_y + s*ry;
-
-		t = floor(t/4);
-		s*=2;
-	}
-
-
-}
-*/
 void rotate( int n, int &x, int &y, int rx, int ry){
 	int t;
 	if(ry == 0){
@@ -340,48 +310,10 @@ void hilbert::index_1D(int &d, int x, int y){
 		d = d + s * s * ((3 * rx) ^ ry);
 		rotate(s, x, y, rx, ry);
 
-//		printf("\ns = %d, d = %d, x = %d, y = %d\n",s, d, x, y);
-
 	}
 	
 }
 
-/*void hilbert::index_1D(int &d, int x, int y){
-	// Boundary Conditions
-	x = ((x % side) + side) % side;
-	y = ((y % side) + side) % side;
-
-	// Initalise some variables
-	int s, rx, ry;
-
-	d = 0;
-	
-	s = size/2;
-
-	while( 0 < s){
-
-		if( 0 < ( (unsigned int) abs(x) & (unsigned int) s)){
-			rx = 1;
-		} else {
-			rx = 0;
-		}
-
-		if( 0 < ( (unsigned int) abs(y) & (unsigned int) s)){
-			ry = 1;
-		} else {
-			ry = 0;
-		}
-		
-		d += s*s*( (unsigned int) (3*rx) ^ (unsigned int) ry);
-		
-		rotate( s, x, y, rx, ry);
-		
-		s = floor( s / 2 );		
-
-
-	}
-}
-*/
 void hilbert::print_2D(){
 	int d;
 
