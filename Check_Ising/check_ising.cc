@@ -10,12 +10,15 @@
 using namespace std::chrono;
 
 /*
- * This script uses the check model to parallelise the Ising mode
+ * This script uses the check model to parallelise the Ising model
  *
  */
 
+
+// Function used to calculate ising model which returns array of magnetization at each iteration
 void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n, int m, double* measurements);
 
+// Used in testinf to print the sub-lattice on a certain rank
 void print_rank(double** mat, int n, int m, int rank, int p_rank, MPI_Comm comm);
 
 int main(int argc, char* argv[]){
@@ -61,7 +64,8 @@ int main(int argc, char* argv[]){
 
 		}
 	}
-
+	
+	// Initailise values used by MPI
 	int rank, nprocs;
 
 	int nsamples = nsteps;
@@ -72,6 +76,48 @@ int main(int argc, char* argv[]){
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
+	// Exit if incorrect values are found
+	if(length < 4){
+		if(rank == 0){
+			printf("This function calculates the Ising model.\n Flags change the follow:\n");
+			printf("t - the temperature of the lattice\n");
+			printf("n - the number of iterations\n");
+			printf("m - the size of the lattice\n");
+			printf("p - prints in a way readable by certain functions\n");
+			printf("c - returns timings of the setup and function\n");
+			printf("\nm value must larger that 4\n");
+		}
+		MPI_Finalize();
+		return 0;
+		
+	}
+	if(temp < 0){
+		if(rank == 0){
+		printf("This function calculates the Ising model.\n Flags change the follow:\n");
+		printf("t - the temperature of the lattice\n");
+		printf("n - the number of iterations\n");
+		printf("m - the size of the lattice\n");
+		printf("p - prints in a way readable by certain functions\n");
+		printf("c - returns timings of the setup and function\n");
+		printf("\nt value must be greater that 0\n");
+		}
+		MPI_Finalize();
+		return 0;
+	
+	}
+	if(nsteps < 1){
+		if(rank == 0){
+			printf("This function calculates the Ising model.\n Flags change the follow:\n");
+			printf("t - the temperature of the lattice\n");
+			printf("n - the number of iterations\n");
+			printf("m - the size of the lattice\n");
+			printf("p - prints in a way readable by certain functions\n");
+			printf("c - returns timings of the setup and function\n");
+			printf("\nn value must be greater that 1\n");
+		}
+		MPI_Finalize();
+		return 0;
+	}
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	high_resolution_clock::time_point setup_start = high_resolution_clock::now();
@@ -184,8 +230,6 @@ int main(int argc, char* argv[]){
 
 	duration<double> setup_time = duration_cast<duration<double>>(setup_end - setup_start);
 
-	// Print x_length and y_length
-
 	// Now begin the Ising model for each rank
 
 	// Create array that will store the results
@@ -215,13 +259,12 @@ int main(int argc, char* argv[]){
 
 	if(rank == 0){
 		if(p == 0){
-			printf("Global average = %f, Temp = %f, nsteps = %d, length = %d, nprocs = %d\n", global_av[nsamples-1], temp, nsteps, length, nprocs);
+			printf("Global average = %f, Temp = %f, nsteps = %d, length = %d, nprocs = %d, time = %f\n", global_av[nsamples-1], temp, nsteps, length, nprocs, func_time.count());
 		} else if(p == 1){
 			printf("%f %d %d %d ", temp, nsteps, length, nprocs);
 
-			printf("times= %f %f ", setup_time.count(), func_time.count());
+			printf(" %f %f ", setup_time.count(), func_time.count());
 
-			printf("results=");
 			for(i=0; i<nsamples; i++){
 				printf(" %f", global_av[i]);
 			}
@@ -249,6 +292,19 @@ int main(int argc, char* argv[]){
 
 
 // Function which Calculuates the Ising model on each processor
+// mat: Matrix which will be upadated
+// comm: MPI comm which will be used to send halo points
+// temp: Temperature of the lattice
+// step: distance to first black point in the checker board
+// n: Number of rows
+// m: number of columns
+// measurements: Array which will store the new magnetisation after each sweep
+//
+// This function iterates through mat, only updating black points in the chckerboard
+// Halo points are send and then the white points are updated
+//
+// After each iteration the magnetisation of the lattice is calculated 
+//
 void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n, int m, double* measurements){
 	int iter, i, j;
 
@@ -274,7 +330,6 @@ void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n
 
 	// Begin iterations;
 	for( iter=0; iter<nsteps; iter++){
-
 		odd_even = step;		
 
 		// Send halo points
@@ -300,7 +355,6 @@ void ising(double** mat, MPI_Comm comm, double temp, int step, int nsteps, int n
 		// Now begin ising model
 		for(i = 0; i<n; i++){
 			for(j = odd_even; j<m; j+=2){
-
 				energy = -1 * mat[i][j] * (mat[i+1][j] + mat[i-1][j] + mat[i][j-1] + mat[i][j+1]);
 				d_energy = -2*energy;
 				if(d_energy <= 0){

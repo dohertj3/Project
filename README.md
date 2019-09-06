@@ -1,2 +1,0 @@
-# Project
-Summer Project

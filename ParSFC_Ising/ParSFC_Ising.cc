@@ -13,15 +13,17 @@
 using namespace std::chrono;
 
 /*
- * This script used SFCs to calculate to load balance the Ising model
- *
+ * This script used an SFC to calculate the Ising model
  */
 
+// Test function used to print a list
 void print_list(std::list<int> a);
 
-void send_edges(SFC* curve, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm) ;
+// Function which sends the Halo points between processors
+void send_edges(SFC* curve, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, std::vector<int> s_proc) ;
 
-void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, double* &res);
+// Function which follows the ising model
+void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, double* &res, std::vector<int> s_proc);
 
 int main(int argc, char* argv[]){
 
@@ -45,7 +47,7 @@ int main(int argc, char* argv[]){
 			case 't':
 				temp = atof(argv[optind]);
 				break;
-
+	
 			case 'n':
 				nsteps = atoi(argv[optind]);
 				break;
@@ -64,12 +66,64 @@ int main(int argc, char* argv[]){
 	}
 
 
+	// Test if n is a power of 2
+	int test = n;
+	while(test % 2 == 0){
+		test /= 2;
+		if(test == 1){
+			break;
+		}
+	}
+
 	double* res = new double[nsteps]();
 
 	// Begin MPI
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+
+	// Exit if incorrect values are found
+	if(test != 1){
+		if(rank == 0){
+			printf("This function calculates the Ising model.\n Flags change the follow:\n");
+			printf("t - the temperature of the lattice\n");
+			printf("n - the number of iterations\n");
+			printf("m - the size of the lattice\n");
+			printf("p - prints in a way readable by certain functions\n");
+			printf("c - returns timings of the setup and function\n");
+			printf("\nm value must be a power of  2\n");
+		}
+		MPI_Finalize();
+		return 0;
+		
+	}
+	if(temp < 0){
+		if(rank == 0){
+		printf("This function calculates the Ising model.\n Flags change the follow:\n");
+		printf("t - the temperature of the lattice\n");
+		printf("n - the number of iterations\n");
+		printf("m - the size of the lattice\n");
+		printf("p - prints in a way readable by certain functions\n");
+		printf("c - returns timings of the setup and function\n");
+		printf("\nt value must be greater that 0\n");
+		}
+		MPI_Finalize();
+		return 0;
+	
+	}
+	if(nsteps < 1){
+		if(rank == 0){
+			printf("This function calculates the Ising model.\n Flags change the follow:\n");
+			printf("t - the temperature of the lattice\n");
+			printf("n - the number of iterations\n");
+			printf("m - the size of the lattice\n");
+			printf("p - prints in a way readable by certain functions\n");
+			printf("c - returns timings of the setup and function\n");
+			printf("\nn value must be greater that 1\n");
+		}
+		MPI_Finalize();
+		return 0;
+	}
 
 
 	high_resolution_clock::time_point setup_start = high_resolution_clock::now();
@@ -207,6 +261,15 @@ int main(int argc, char* argv[]){
 		}
 	}
 
+	std::vector<int> s_proc;
+
+	for(int i=0; i<send_proc.size(); i++){
+		if(send_proc[i].size() != 0){
+			s_proc.push_back(i);
+		}
+	}
+
+
 	MPI_Barrier(MPI_COMM_WORLD);
 	high_resolution_clock::time_point setup_end = high_resolution_clock::now();
 
@@ -217,7 +280,7 @@ int main(int argc, char* argv[]){
 	MPI_Barrier(MPI_COMM_WORLD);
 	high_resolution_clock::time_point func_start = high_resolution_clock::now();
 
-	ParSFC_Ising(&Hil_SFC, temp, nsteps, rank,  a, b, nprocs, send_type, recv_type, MPI_COMM_WORLD, res);
+	ParSFC_Ising(&Hil_SFC, temp, nsteps, rank,  a, b, nprocs, send_type, recv_type, MPI_COMM_WORLD, res, s_proc);
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	high_resolution_clock::time_point func_end = high_resolution_clock::now();
@@ -237,7 +300,7 @@ int main(int argc, char* argv[]){
 	// Print results
 	if(rank == 0){
 		if(p == 1){
-			printf(" %f %d %d ", temp, nsteps, n);
+			printf(" %f %d %d %d ", temp, nsteps, n, nprocs);
 
 			if(c == 1){
 				printf(" %f %f ", setup_time.count(), func_time.count());
@@ -249,9 +312,9 @@ int main(int argc, char* argv[]){
 			}
 			printf("\n");
 		} else {
-			printf("Temperature =  %f, nsteps = %d, size = %d\n", temp, nsteps, n);
+			printf("Temperature =  %f, nsteps = %d, size = %d, nprocs = %d\n", temp, nsteps, n, nprocs);
 			printf("Final Magnetization  = %f\n", global_res[nsteps - 1]);
-	
+
 			if(c == 1){
 				printf("Setup Time = %f, Function Time = %f\n", setup_time.count(), func_time.count());
 			}
@@ -284,9 +347,10 @@ int main(int argc, char* argv[]){
 	// Finish MPI
 	MPI_Finalize();
 
+	return 0;
 }
 
-
+// Testing function used to print a list
 void print_list( std::list<int> a){
 	std :: list<int> ::iterator it;
 	for(it = a.begin(); it != a.end(); it++){
@@ -297,29 +361,46 @@ void print_list( std::list<int> a){
 
 }
 
-void send_edges(SFC* curve, int no_proc, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm){
-	MPI_Request* send_req = new MPI_Request[no_proc];
-	MPI_Request* recv_req = new MPI_Request[no_proc];
+// Send Halo points between each SFC
+void send_edges(SFC* curve, int no_proc, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, std::vector<int> s_proc){
 
-	for(int i=0; i<no_proc; i++){
-		MPI_Isend(curve->start(), 1, data_send[i], i, 0, comm, &send_req[i]);
+	MPI_Request* send_req = new MPI_Request[s_proc.size()];
+	MPI_Request* recv_req = new MPI_Request[s_proc.size()];
+
+	for(int i=0; i<s_proc.size(); i++){
+		MPI_Isend(curve->start(), 1, data_send[s_proc[i]], s_proc[i], 0, comm, &send_req[i]);
 	}
 
 	// Now receive
-	for(int i=0; i<no_proc; i++){
-		MPI_Irecv(curve->start(), 1, data_recv[i], i, 0, comm, &recv_req[i]);
+	for(int i=0; i<s_proc.size(); i++){
+		MPI_Irecv(curve->start(), 1, data_recv[s_proc[i]], s_proc[i], 0, comm, &recv_req[i]);
 	}
 
-	MPI_Waitall(no_proc, send_req, MPI_STATUSES_IGNORE);
-	MPI_Waitall(no_proc, recv_req, MPI_STATUSES_IGNORE);
+	MPI_Waitall(s_proc.size(), send_req, MPI_STATUSES_IGNORE);
+	MPI_Waitall(s_proc.size(), recv_req, MPI_STATUSES_IGNORE);
 
 	delete[] send_req;
 	delete[] recv_req;
 
 }
 
-// This function calculates the metropolis algorithm 
-void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, double* &res){
+/* This function calculates the metropolis-hastings model for the Ising model 
+ * Curve, an SFC class which stores the values of a matrix in a one dimensional array
+ * Temp, temperature of the latticec
+ * nsteps, number of iterations of the model
+ * rank, rank of processor which runs the function
+ * a, start of section in SFC
+ * b, end of section in SFC
+ * nprocs, number of processors
+ * Send type, array of MPI_datatypes that must be send to adjacent processors 
+ * Recv type, array of MPI_datatype that must be received from adjacent processors
+ * comm, communicator used to send data between processors
+ * res, array which stores the sum of the spins on each point
+ *
+ * This function iterates though through an SFC and updates values based on their adjacent neighbours
+ * After each iteration the sum of all spins are saved into the res array
+ */
+void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, int nprocs, MPI_Datatype* data_send, MPI_Datatype* data_recv, MPI_Comm comm, double* &res, std::vector<int> s_proc){
 	
 	// Initalise values
 	double energy;
@@ -328,9 +409,11 @@ void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, i
 
 	int x, y;
 	
+
 	int even_start, odd_start;
 	even_start = a;
 
+	// Calculate colour of starting site
 	if ((a % 2) == 1){
 		even_start++;
 		odd_start = a;	
@@ -340,7 +423,7 @@ void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, i
 	
 
 	// Set up values
-	send_edges(curve, nprocs, data_send, data_recv, comm);
+	send_edges(curve, nprocs, data_send, data_recv, comm, s_proc);
 
 	// Now iterate along SFC
 	for(int i=0; i< nsteps; i++){
@@ -364,7 +447,7 @@ void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, i
 		}
 
 		// Send edges again
-		send_edges(curve, nprocs, data_send, data_recv, comm);
+		send_edges(curve, nprocs, data_send, data_recv, comm, s_proc);
 
 		// Iterate along the odd points of the SFC
 		for(int j=odd_start; j<b; j+=2){
@@ -384,7 +467,7 @@ void ParSFC_Ising(SFC* curve, double temp, int nsteps, int rank, int a, int b, i
 			}
 
 		}
-		send_edges(curve, nprocs, data_send, data_recv, comm);
+		send_edges(curve, nprocs, data_send, data_recv, comm, s_proc);
 
 		// Calculate the magnetization
 		for(int j=a; j<b; j++){

@@ -1,0 +1,5 @@
+This directory stores folders of all the results from running each ising model implementation
+
+nproc_res - This directory holds results on how each function scales with number of processors
+size_res - This directory holds results on how each function divides the lattice
+temp_res - This directory has functions which analyse the results from the Ising model

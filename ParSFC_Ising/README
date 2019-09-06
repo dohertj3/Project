@@ -1,0 +1,28 @@
+check_ising.cc is the function which uses SFCs to parallelise the Ising model
+It takes in the following flags
+n - number of steps
+m - size of lattice
+t - temperature of lattice
+p - prints results in a format readable by plotting functions
+c - returns timings of each function
+
+--------Compiler prerequisites and how to run--------------
+Latest version of gcc required
+must load openmpi
+
+use mpirun to run script, for example
+
+mpirun -n 8 ./ising -n 1000 -m 32 -t 2.25 
+
+n - flag used to decide how many processors to use
+
+-------------other files-------------
+./ising - the executable which must be run
+
+nproc128.sh  - creates timings for a number of different sizes of processors for matrix size 128
+nproc64.sh  - creates timings for a number of different sizes of processors for matrix size 64
+nproc32.sh  - creates timings for a number of different sizes of processors for matrix size 32
+nproc16.sh  - creates timings for a number of different sizes of processors for matrix size 16
+nproc8.sh  - creates timings for a number of different sizes of processors for matrix size 8
+
+temp.sh - gets the magnetisation of the lattice for a number of different temperatures

@@ -1,0 +1,6 @@
+This directory holds directories which each store different implementations of the Ising model
+
+Basic_Ising - This directory stores the basic serial ising model
+SFC_Ising - This directory stores serial implementation of the SFC Ising model
+Check_Ising - This directory stores the parallel version of the checkerboard model of updating the Ising model
+ParSFC_Ising - This directory stores the parallel version of the SFC load balancing method 

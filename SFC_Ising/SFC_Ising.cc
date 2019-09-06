@@ -12,9 +12,6 @@ using namespace std::chrono;
 void print_mat(double** mat, int n, int m);
 
 // Function which runs a metropolis algorithm to calculate the Ising model
-// n = number of iterations
-// t = temp
-// res = average magnetization at the end
 void SFC_Ising(SFC* a, int n, double t, double* res);
 
 int main(int argc, char* argv[]){
@@ -55,6 +52,47 @@ int main(int argc, char* argv[]){
 				break;
 
 		}
+	}
+
+	// Test if n is a power of 2
+	int test1 = n;
+	while(test1 % 2 == 0){
+		test1 /= 2;
+		if(test1 == 1){
+			break;
+		}
+	}
+
+	// Input handling
+	if(test1 != 1){
+		printf("This function calculates the Ising model.\n Flags change the follow:\n");
+		printf("t - the temperature of the lattice\n");
+		printf("n - the number of iterations\n");
+		printf("m - the size of the lattice\n");
+		printf("p - prints in a way readable by certain functions\n");
+		printf("\nm value must be greater that 4\n");
+		return 0;
+	
+	}
+	if(temp < 0){
+		printf("This function calculates the Ising model.\n Flags change the follow:\n");
+		printf("t - the temperature of the lattice\n");
+		printf("n - the number of iterations\n");
+		printf("m - the size of the lattice\n");
+		printf("p - prints in a way readable by certain functions\n");
+		printf("\nt value must be greater that 0\n");
+		return 0;
+	
+	}
+	if(nsteps < 1){
+		printf("This function calculates the Ising model.\n Flags change the follow:\n");
+		printf("t - the temperature of the lattice\n");
+		printf("n - the number of iterations\n");
+		printf("m - the size of the lattice\n");
+		printf("p - prints in a way readable by certain functions\n");
+		printf("\nn value must be greater that 1\n");
+		return 0;
+	
 	}
 
 	// Create Matrix
@@ -112,7 +150,10 @@ int main(int argc, char* argv[]){
 
 /* Metropolis function
  * This function goes updates the grid in the order of a SFC
- * n is the number of iterations
+ * a, the SFC class which holds the matrix in an array
+ * n, number of iterations
+ * t, temperature of the array
+ * res, array which holds the magnetisation of each iteration
  *
  */
 void SFC_Ising(SFC* a, int n, double t, double* res){

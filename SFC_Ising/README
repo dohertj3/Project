@@ -1,0 +1,22 @@
+Basic_Ising.cc calculates a number of samples of the ising model
+Input flags
+n - number of steps
+m - size of lattice
+t - temperature of lattice
+p - prints results in a format to be used by a different file
+
+-----MAKE requirements----
+The latest version of gcc
+
+If on chuck must load gcc from cports
+
+-----Description of other files in this folder----
+SFC_Ising.cc - c++ code to be compiled
+sfc.h - header file containing SFC and Hilbert class
+sfc.cc - describes functions defined in sfc.h
+
+./ISING - executable for ising model
+
+run.sh - creates a file with the  magnetization at a number of temperatures
+size.sh - creates a file with the time results for a number of sizes
+
